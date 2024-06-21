@@ -1,23 +1,16 @@
 import os
 from PIL import Image
-Image.MAX_IMAGE_PIXELS = None
 import cv2
 import numpy as np
 import time
+
+Image.MAX_IMAGE_PIXELS = None
 
 # Função para carregar pedaços da imagem grande usando PIL e convertê-la para o formato do OpenCV
 def carregar_pedacos_imagem_grande(imagem_path, bloco_tamanho=1024):
     imagem = Image.open(imagem_path)
     largura, altura = imagem.size
-    pedacos = []
-    
-    for y in range(0, altura, bloco_tamanho):
-        for x in range(0, largura, bloco_tamanho):
-            caixa = (x, y, x + bloco_tamanho, y + bloco_tamanho)
-            pedaco = imagem.crop(caixa)
-            pedacos.append((np.array(pedaco), (x, y)))
-    
-    return pedacos, largura, altura
+    return largura, altura, imagem
 
 # Função para processar cada pedaço
 def processar_pedaco(pedaco, x_offset, y_offset, resultado):
@@ -43,11 +36,13 @@ def processar_pedaco(pedaco, x_offset, y_offset, resultado):
     
     return num_carros
 
-# Carregando a imagem em pedaços
+# Caminho da imagem
 imagem_path = 'car300.tiff'
+bloco_tamanho = 1024
+
 start_time = time.time()
 if os.path.exists(imagem_path):
-    pedacos, largura, altura = carregar_pedacos_imagem_grande(imagem_path)
+    largura, altura, imagem = carregar_pedacos_imagem_grande(imagem_path, bloco_tamanho)
 else:
     print(f"Erro: a imagem '{imagem_path}' não foi encontrada.")
     exit()
@@ -57,8 +52,14 @@ resultado = np.zeros((altura, largura, 3), dtype=np.uint8)
 
 # Processar cada pedaço da imagem
 num_carros_total = 0
-for pedaco, (x_offset, y_offset) in pedacos:
-    num_carros_total += processar_pedaco(pedaco, x_offset, y_offset, resultado)
+for y in range(0, altura, bloco_tamanho):
+    for x in range(0, largura, bloco_tamanho):
+        caixa = (x, y, min(x + bloco_tamanho, largura), min(y + bloco_tamanho, altura))
+        pedaco = imagem.crop(caixa)
+        pedaco_cv = cv2.cvtColor(np.array(pedaco), cv2.COLOR_RGB2BGR)
+        num_carros_total += processar_pedaco(pedaco_cv, x, y, resultado)
+        pedaco.close()
+        del pedaco_cv  # Explicitamente deletar a variável para liberar memória
 
 # Fim do temporizador
 end_time = time.time()
